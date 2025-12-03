@@ -35,7 +35,7 @@ export const log = (
       // avoid crashing the host app if a transport fails
       // fallback to console
       // eslint-disable-next-line no-console
-      console.error("[error-framework] transport threw", e);
+      console.error(`[${level}] @vaerone/erroriq transport threw`, e);
     }
   });
 };
