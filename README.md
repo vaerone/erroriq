@@ -1,4 +1,4 @@
-# @vaerone/erroriq
+# ErrorIQ
 
 ErrorIQ is a lightweight, framework-agnostic TypeScript library that provides structured errors, serialization utilities and a pluggable logging pipeline.
 
@@ -9,8 +9,3 @@ ErrorIQ is a lightweight, framework-agnostic TypeScript library that provides st
 - Safe serializers for sending to UI / API
 - Transport pipeline (addTransport) — plug in Sentry, Datadog, console, etc
 - Zero built-in adapters (keep integrations external)
-
-## Quick start
-
-```bash
-npm i @vaerone/erroriq
