@@ -27,12 +27,25 @@ export class BaseAppError extends Error {
     Error.captureStackTrace?.(this, this.constructor);
   }
 
+  private static parseStack(error: Error): string[] {
+    if (!error.stack) return [];
+    return error.stack
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
   toJSON() {
     return {
       name: this.name,
       code: this.code,
       message: this.message,
       metadata: this.metadata,
+      originalError: this.originalError
+        ? {
+            stack: BaseAppError.parseStack(this.originalError as Error),
+          }
+        : undefined,
       tags: this.tags,
       isTransient: this.isTransient,
     };
