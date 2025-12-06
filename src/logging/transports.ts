@@ -1,16 +1,31 @@
-import type { Transport } from "@erroriq/logging/logger";
+import type { Transport } from "@erroriq/logging/types";
+import { logFallback } from "@erroriq/logging/fallback";
 
 export const consoleTransport: Transport = (entry) => {
-  const { level, message, error, context } = entry;
+  const { formatted, level, message, error, context, timestamp } = entry;
+
   const prefix = `[${level}] @vaerone/erroriq`;
 
+  if (formatted !== undefined) {
+    if (typeof formatted === "string") {
+      console.log(prefix, formatted);
+      return;
+    }
+
+    try {
+      console.log(prefix, formatted);
+      return;
+    } catch (err) {
+      logFallback(prefix, entry, err);
+      return;
+    }
+  }
+
+  const fn = level === "error" ? "error" : level === "warn" ? "warn" : "log";
+
   if (error instanceof Error) {
-    console.error(prefix, message, { context, stack: error.stack });
+    console[fn](prefix, message, { context, stack: error.stack, timestamp });
   } else {
-    console[level === "error" ? "error" : level === "warn" ? "warn" : "log"](
-      prefix,
-      message,
-      { context, error },
-    );
+    console[fn](prefix, message, { context, error, timestamp });
   }
 };

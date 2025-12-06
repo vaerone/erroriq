@@ -1,52 +1,97 @@
-import { BaseAppError } from "@erroriq/core/BaseAppError";
+import type {
+  LogEntry,
+  LogLevel,
+  Transport,
+  LogMiddleware,
+  LogFormatter,
+} from "@erroriq/logging/types";
+import { logFallback } from "@erroriq/logging/fallback";
 
-export type LogLevel = "error" | "warn" | "info";
+export class Logger<TFormatted = unknown> {
+  private middlewares: LogMiddleware<TFormatted>[] = [];
+  private transports: Transport<TFormatted>[] = [];
+  private formatter?: LogFormatter<TFormatted>;
 
-export type LogEntry = {
-  level: LogLevel;
-  message: string;
-  error?: unknown;
-  context?: Record<string, unknown>;
-};
+  use(mw: LogMiddleware<TFormatted>) {
+    this.middlewares.push(mw);
+  }
 
-export type Transport = (entry: LogEntry) => void;
+  addTransport(t: Transport<TFormatted>) {
+    this.transports.push(t);
+  }
 
-let transports: Transport[] = [];
+  setFormatter(formatter: LogFormatter<TFormatted>) {
+    this.formatter = formatter;
+  }
 
-export const addTransport = (transport: Transport) => {
-  transports.push(transport);
-};
+  log(
+    level: LogLevel,
+    message: string,
+    error?: unknown,
+    context?: Record<string, unknown>,
+  ) {
+    const entry: LogEntry<TFormatted> = {
+      level,
+      message,
+      error,
+      context,
+    };
 
-export const clearTransports = () => {
-  transports = [];
-};
+    let index = -1;
 
-export const log = (
-  level: LogLevel,
-  message: string,
-  error?: unknown,
-  context?: Record<string, unknown>,
-) => {
-  const entry: LogEntry = { level, message, error, context };
-  transports.forEach((t) => {
-    try {
-      t(entry);
-    } catch (e) {
-      // avoid crashing the host app if a transport fails
-      // fallback to console
-      // eslint-disable-next-line no-console
-      console.error(`[${level}] @vaerone/erroriq transport threw`, e);
+    const run = (currentEntry: LogEntry<TFormatted>) => {
+      index++;
+
+      if (index < this.middlewares.length) {
+        try {
+          this.middlewares[index](currentEntry, run);
+        } catch (err) {
+          // Middleware should not break the logging system
+          logFallback(`[${currentEntry.level}] @erroriq`, currentEntry, err);
+
+          // Continue the chain anyway
+          run(currentEntry);
+        }
+      } else {
+        this.dispatch(currentEntry);
+      }
+    };
+
+    run(entry);
+  }
+
+  private dispatch(entry: LogEntry<TFormatted>) {
+    // Format if a formatter is configured
+    const finalEntry: LogEntry<TFormatted> = this.formatter
+      ? {
+          ...entry,
+          formatted: this.formatter.format(entry as LogEntry<unknown>),
+        }
+      : entry;
+
+    for (const transport of this.transports) {
+      try {
+        transport(finalEntry);
+      } catch (err) {
+        // If a transport fails, use the fallback logger
+        logFallback(`[${finalEntry.level}] @erroriq`, finalEntry, err);
+      }
     }
-  });
-};
+  }
 
-export const logError = (
-  error: unknown,
-  message = "Unhandled error",
-  context?: Record<string, unknown>,
-) => log("error", message, error, context);
+  error(
+    error: unknown,
+    message = "Unhandled error",
+    context?: Record<string, unknown>,
+  ) {
+    this.log("error", message, error, context);
+  }
 
-export const info = (message: string, context?: Record<string, unknown>) =>
-  log("info", message, undefined, context);
-export const warn = (message: string, context?: Record<string, unknown>) =>
-  log("warn", message, undefined, context);
+  warn(message: string, context?: Record<string, unknown>) {
+    this.log("warn", message, undefined, context);
+  }
+
+  info(message: string, context?: Record<string, unknown>) {
+    this.log("info", message, undefined, context);
+  }
+}
